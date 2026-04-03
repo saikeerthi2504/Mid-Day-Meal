@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 
 const DAYS = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const EGG_DAYS  = ["MON","WED","FRI"];
-const RAGI_DAYS = ["TUE","THU","SAT"];
+const EGG_DAYS   = ["MON","TUE","WED","THU","FRI"];  // Eggs every weekday
+const CHIKKI_DAYS= ["MON","WED","FRI"];               // Chikki Mon/Wed/Fri only
+const RAGI_DAYS  = ["TUE","THU","SAT"];               // Ragi+Jaggery Tue/Thu/Sat
 const ITEMS = ["rice","eggs","chikki","ragi","jaggery"];
 
 const HOL_TYPES = [
@@ -38,10 +39,10 @@ const INFO_FIELDS = [
 const BAL_ROWS = [
   ["OPENING BALANCE",     "open"],
   ["RECEIVED (ALLOTMENT)","recv"],
-  ["TOTAL (O.B.+RECD.)",  "total"],   // auto-calculated
+  ["TOTAL (O.B.+RECD.)",  "total"],
   ["USED",                "used_tot"],
   ["DAMAGED/EXPIRED",     "dmg"],
-  ["CLOSING BALANCE",     "close"],   // auto-calculated
+  ["CLOSING BALANCE",     "close"],
 ];
 
 // ── helpers ──────────────────────────────────────────────
@@ -66,14 +67,13 @@ function makeRow(date = "", day = "MON") {
 function autoFill(r) {
   const p = parseFloat(r.present) || 0;
   if (!r.holiday_type && p > 0) {
-    const rice = (p * 0.1).toFixed(2);
-    // meals_taken mirrors present
+    const rice        = (p * 0.1).toFixed(2);
     const meals_taken = String(p);
-    if (EGG_DAYS.includes(r.week_day))
-      return { ...r, meals_taken, rice_used: rice, eggs_used: String(p), chikki_used: String(p), ragi_used: "", jaggery_used: "" };
-    if (RAGI_DAYS.includes(r.week_day))
-      return { ...r, meals_taken, rice_used: rice, eggs_used: "", chikki_used: "", ragi_used: (p * 0.01).toFixed(3), jaggery_used: (p * 0.01).toFixed(3) };
-    return { ...r, meals_taken, rice_used: rice, eggs_used: "", chikki_used: "", ragi_used: "", jaggery_used: "" };
+    const eggs_used   = EGG_DAYS.includes(r.week_day)   ? String(p) : "";
+    const chikki_used = CHIKKI_DAYS.includes(r.week_day) ? String(p) : "";
+    const ragi_used   = RAGI_DAYS.includes(r.week_day)  ? (p * 0.01).toFixed(3) : "";
+    const jaggery_used= RAGI_DAYS.includes(r.week_day)  ? (p * 0.01).toFixed(3) : "";
+    return { ...r, meals_taken, rice_used: rice, eggs_used, chikki_used, ragi_used, jaggery_used };
   }
   if (!r.holiday_type && p === 0)
     return { ...r, meals_taken: "", rice_used: "", eggs_used: "", chikki_used: "", ragi_used: "", jaggery_used: "" };
@@ -91,7 +91,7 @@ function buildCalendar(month, year) {
 }
 
 const defaultHdr = {
-  village:"", month:"", year:"",
+  village:"", mandal:"", month:"", year:"",
   dise_code:"", agency_name:"", bank_name:"", account_no:"",
   working_days:"", avg_meals:"", num_cooks:"",
   rice_open:"",    rice_recv:"",    rice_used_tot:"",    rice_dmg:"",
@@ -123,14 +123,12 @@ const selStyle = (color, bold) => ({
   color: color || "#444", fontWeight: bold ? "bold" : "normal",
 });
 
-// Read-only auto-value display
 const AutoSpan = ({ val, color }) => (
   <span style={{ fontWeight:"bold", color: color || "#4a148c", display:"block", textAlign:"center" }}>
     {val || "—"}
   </span>
 );
 
-// Digit-only cell input (no onChange auto-fill side effects)
 const Cell = ({ val, onChange }) => (
   <input
     type="text"
@@ -143,7 +141,6 @@ const Cell = ({ val, onChange }) => (
   />
 );
 
-// Digit-only class count input (replaces type="number")
 const ClassCell = ({ val, onChange }) => (
   <input
     type="text"
@@ -169,7 +166,6 @@ export default function App() {
   useEffect(() => { save("pmr7", rows); }, [rows]);
   useEffect(() => { save("pmf7", ftr);  }, [ftr]);
 
-  // ── header helpers ──
   const setH = (k, v) => {
     setHdr(h => {
       const next = { ...h, [k]: v };
@@ -208,10 +204,8 @@ export default function App() {
 
   const setF = (k, v) => setFtr(f => ({ ...f, [k]: v }));
 
-  // ── derived totals (auto-calculated, no manual input) ──
   const activeRows  = rows.filter(r => r.date);
-  const amtPerDay   = r => (!r.holiday_type && r.date)
-    ? (parseFloat(r.meals_taken)||0) * 6.19 : 0;
+  const amtPerDay   = r => (!r.holiday_type && r.date) ? (parseFloat(r.meals_taken)||0) * 6.19 : 0;
   const totalRice    = activeRows.reduce((s,r) => s + (parseFloat(r.rice_used)    ||0), 0);
   const totalEggs    = activeRows.reduce((s,r) => s + (parseFloat(r.eggs_used)    ||0), 0);
   const totalChikki  = activeRows.reduce((s,r) => s + (parseFloat(r.chikki_used)  ||0), 0);
@@ -219,7 +213,6 @@ export default function App() {
   const totalJaggery = activeRows.reduce((s,r) => s + (parseFloat(r.jaggery_used) ||0), 0);
   const totalAmt     = activeRows.reduce((s,r) => s + amtPerDay(r), 0);
 
-  // ── balance auto-calc (TOTAL and CLOSING BALANCE are always computed) ──
   const balVal = (item, suffix) => {
     const o = parseFloat(hdr[item+"_open"])||0;
     const r = parseFloat(hdr[item+"_recv"])||0;
@@ -229,7 +222,6 @@ export default function App() {
     return hdr[item+"_"+suffix] || "";
   };
 
-  // ── class-wise totals (auto-calculated) ──
   const boysTotal  = [1,2,3,4,5].reduce((s,c) => s+(parseFloat(ftr[`boys_cls${c}`])||0),  0);
   const girlsTotal = [1,2,3,4,5].reduce((s,c) => s+(parseFloat(ftr[`girls_cls${c}`])||0), 0);
   const grandTotal = boysTotal + girlsTotal;
@@ -254,7 +246,6 @@ export default function App() {
         }
       `}</style>
 
-      {/* Print button */}
       <div className="no-print" style={{ textAlign:"center", marginBottom:6 }}>
         <button className="print-btn" onClick={() => window.print()}>🖨 Print / Save as PDF</button>
       </div>
@@ -282,13 +273,13 @@ export default function App() {
 
         {/* ── Village / Month / Year ── */}
         <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:5, flexWrap:"wrap" }}>
-          {/* <span style={{ fontWeight:"bold" }}>MAKTHAPUR,</span> */}
-         <input value={hdr.village} onChange={e => setH("village", e.target.value)}
-            style={{ ...plainInp, width:100 }} />
-          <span>Village,</span>
           <input value={hdr.village} onChange={e => setH("village", e.target.value)}
             style={{ ...plainInp, width:100 }} />
-          <span>Mandal &nbsp; Month:</span>
+          <span>Village,</span>
+          <input value={hdr.mandal} onChange={e => setH("mandal", e.target.value)}
+            style={{ ...plainInp, width:100 }} />
+          <span>Mandal,</span>
+          <span>Month:</span>
           <select value={hdr.month} onChange={e => setH("month", e.target.value)} style={{ ...plainInp }}>
             <option value="">-- Month --</option>
             {MONTH_NAMES.map((m,i) => <option key={i} value={String(i+1)}>{m}</option>)}
@@ -305,7 +296,6 @@ export default function App() {
 
         {/* ── Info left + Balance right ── */}
         <table style={{ width:"100%", marginBottom:5 }}><tbody><tr valign="top">
-          {/* Info fields */}
           <td style={{ width:"38%" }}>
             <table style={{ width:"100%" }}><tbody>
               {INFO_FIELDS.map(([label, key, w]) => (
@@ -320,7 +310,6 @@ export default function App() {
             </tbody></table>
           </td>
 
-          {/* Balance table */}
           <td style={{ width:"62%", paddingLeft:10 }}>
             <table style={{ width:"100%", border:"1px solid #888", fontSize:10 }}>
               <thead>
@@ -403,7 +392,6 @@ export default function App() {
                   <td style={{ border:"1px solid #ccc", textAlign:"center" }}>{i+1}</td>
                   <td style={{ border:"1px solid #ccc", textAlign:"center", fontWeight:"bold" }}>{r.date}</td>
 
-                  {/* ── Day dropdown ── */}
                   <td style={{ border:"1px solid #ccc", padding:"1px 2px" }}>
                     <select
                       value={r.week_day}
@@ -421,7 +409,6 @@ export default function App() {
                     </select>
                   </td>
 
-                  {/* ── Holiday selector ── */}
                   <td style={{ border:"1px solid #ccc", padding:"1px 2px" }}>
                     <select
                       value={r.holiday_type === "CUSTOM" ? "CUSTOM" : r.holiday_type}
@@ -458,36 +445,24 @@ export default function App() {
                       <td style={{ border:"1px solid #ccc" }}>
                         <Cell val={r.present} onChange={v => setR(i,"present",v)} />
                       </td>
-                      {/* MEALS TAKEN — auto mirrors Present, read-only */}
                       <td style={{ border:"1px solid #ccc" }}>
                         <AutoSpan val={r.meals_taken} color="#333" />
                       </td>
-
-                      {/* RICE — always auto, read-only */}
                       <td style={{ border:"1px solid #ccc" }}>
                         <AutoSpan val={r.rice_used} color="#4a148c" />
                       </td>
-
-                      {/* EGGS — always auto, read-only */}
                       <td style={{ border:"1px solid #ccc" }}>
                         <AutoSpan val={r.eggs_used} color="#1b5e20" />
                       </td>
-
-                      {/* CHIKKI — always auto, read-only */}
                       <td style={{ border:"1px solid #ccc" }}>
                         <AutoSpan val={r.chikki_used} color="#e65100" />
                       </td>
-
-                      {/* RAGI — always auto, read-only */}
                       <td style={{ border:"1px solid #ccc" }}>
                         <AutoSpan val={r.ragi_used} color="#0d47a1" />
                       </td>
-
-                      {/* JAGGERY — always auto, read-only */}
                       <td style={{ border:"1px solid #ccc" }}>
                         <AutoSpan val={r.jaggery_used} color="#880e4f" />
                       </td>
-
                       <td style={{ border:"1px solid #ccc", textAlign:"center", fontWeight:"bold", color:"#333" }}>
                         6.19
                       </td>
@@ -501,7 +476,6 @@ export default function App() {
               );
             })}
 
-            {/* TOTAL ROW — fully auto-calculated */}
             <tr style={{ background:"#e8eaf6", fontWeight:"bold" }}>
               <td colSpan={4} style={{ border:"1px solid #888", textAlign:"center" }}>TOTAL</td>
               <td style={{ border:"1px solid #888" }} /><td style={{ border:"1px solid #888" }} />
@@ -546,21 +520,18 @@ export default function App() {
                   <td style={{ border:"1px solid #ccc", padding:"2px 14px" }}>{label}</td>
                   {[1,2,3,4,5].map(c => (
                     <td key={c} style={{ border:"1px solid #ccc", textAlign:"center" }}>
-                      {/* ✅ Replaced type="number" with digit-only ClassCell */}
                       <ClassCell
                         val={ftr[`${pfx}_cls${c}`]}
                         onChange={v => setF(`${pfx}_cls${c}`, v)}
                       />
                     </td>
                   ))}
-                  {/* ✅ Auto-calculated total — no input */}
                   <td style={{ border:"1px solid #ccc", textAlign:"center", fontWeight:"bold",
                     background:"#f5f5f5", padding:"2px 10px" }}>
                     {(pfx === "boys" ? boysTotal : girlsTotal) || ""}
                   </td>
                 </tr>
               ))}
-              {/* ✅ Grand total row — fully auto-calculated */}
               <tr style={{ background:"#e8eaf6", fontWeight:"bold" }}>
                 <td style={{ border:"1px solid #ccc", padding:"2px 14px" }}>Total</td>
                 {[1,2,3,4,5].map(c => (
@@ -618,9 +589,10 @@ export default function App() {
       {/* Footer hint */}
       <div className="no-print" style={{ textAlign:"center", marginTop:8, fontSize:10, color:"#888" }}>
         ✅ Auto-saved &nbsp;|&nbsp;
-        <span style={{ color:"#4a148c" }}>Rice = Present × 100g always</span> &nbsp;|&nbsp;
-        <span style={{ color:"#1b5e20" }}>Mon/Wed/Fri → Eggs &amp; Chikki = Present × 1</span> &nbsp;|&nbsp;
-        <span style={{ color:"#0d47a1" }}>Tue/Thu/Sat → Ragi &amp; Jaggery = Present × 10g</span>
+        <span style={{ color:"#4a148c" }}>Rice = Present × 100g (all weekdays)</span> &nbsp;|&nbsp;
+        <span style={{ color:"#1b5e20" }}>Eggs = Present × 1 (Mon–Fri)</span> &nbsp;|&nbsp;
+        <span style={{ color:"#e65100" }}>Chikki = Present × 1 (Mon/Wed/Fri)</span> &nbsp;|&nbsp;
+        <span style={{ color:"#0d47a1" }}>Ragi &amp; Jaggery = Present × 10g (Tue/Thu/Sat)</span>
       </div>
     </div>
   );
