@@ -285,7 +285,7 @@ function PaymentGate({username, onPaid, onCancel}) {
 }
 
 /* ═══════════════════════════════════════════
-   COMPONENT 3: MealVoucherApp
+   COMPONENT 3: MealVoucherApp   
 ═══════════════════════════════════════════ */
 function MealVoucherApp({username, onLogout}) {
   const [hdr,setHdr]=useState(()=>load("pmh8",defaultHdr));
